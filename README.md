@@ -85,13 +85,9 @@ $$
 ### 2.4. Минимальный объем выборки
 Целевая предельная ошибка принимается равной $\Delta_{\text{target}} = \Delta_{\text{pilot}} / 2$.  
 Для бесповторного отбора:
-$$
-n = \frac{N \cdot t^2 \cdot S^2}{N \cdot \Delta^2 + t^2 \cdot S^2}
-$$
+$n = \frac{N \cdot t^2 \cdot S^2}{N \cdot \Delta^2 + t^2 \cdot S^2}$
 Для повторного отбора:
-$$
-n = \frac{t^2 \cdot S^2}{\Delta^2}
-$$
+$n = \frac{t^2 \cdot S^2}{\Delta^2}$
 Поскольку $t$ зависит от $n$, применяется двухшаговая итерационная схема:
 1. $n^{(0)} = \frac{N \cdot z^2 \cdot S^2}{N \cdot \Delta^2 + z^2 \cdot S^2}$, где $z = \Phi^{-1}(1-\alpha/2)$;
 2. $n^{(1)} = f(t_{\alpha/2, n^{(0)}-1}, S^2, \Delta)$.
