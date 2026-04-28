@@ -98,23 +98,14 @@ $n = \frac{t^2 \cdot S^2}{\Delta^2}$
 Загружаем данные, фиксируем `seed=100` и вычисляем взвешенные расстояния для каждого бренда.
 
 ```python
-import numpy as np
-import pandas as pd
-from scipy import stats
-
-np.random.seed(100)
-df = pd.read_excel('Вариант47_Б24-215_Новиков.xlsx')
-N = len(df)
-
-# Функция расчета отклонения
-def deviation(row, ideal_cols, important_cols, brand_cols):
-    return sum(row[imp] * abs(row[ideal] - row[brand]) 
-               for ideal, imp, brand in zip(ideal_cols, important_cols, brand_cols))
-
-for brand, brand_cols in sort_beer.items():
-    df[f'Dev_{brand}'] = df.apply(
-        lambda row: deviation(row, ideal_sort_beer, important_cols, brand_cols), axis=1
-    )
+def deviation(row, ideal_cols, important_cols, sort_bear):
+  dev = 0
+  for ideal_col, important_col, brand_col in zip(ideal_cols, important_cols, sort_bear):
+    ideal = row[ideal_col]
+    importance = row[important_col]
+    brand = row[brand_col]
+    dev += importance * abs(ideal - brand)
+  return dev
 ```
 
 **Результат:** Наименьшее среднее отклонение у бренда `IPA от Волковской пивоварни` ($\bar{d} \approx 34.13$). Данный столбец (`Dev_IPA от Волковской пивоварни`) используется как целевая переменная в дальнейших расчетах.
@@ -133,16 +124,35 @@ for brand, brand_cols in sort_beer.items():
 
 ```python
 # Пример расчета для типического отбора
-def sample_method_typical(n, replace, seed=100):
+def sample_method_5b(n, replace, seed=100):
+    group_samples = []
+    group_variances = []
+    group_sizes = []
+
     groups = df['group_typical'].unique()
-    variances, sizes = [], []
-    for g in groups:
-        g_data = df[df['group_typical'] == g]
-        n_h = max(1, int(np.ceil(n * len(g_data) / N)))
-        sample = g_data.sample(n=n_h, replace=replace, random_state=seed)
-        variances.append(sample[best_brand_column].var())
-        sizes.append(n_h)
-    return pd.concat(...), sum(n*v for n,v in zip(sizes, variances)) / sum(sizes)
+
+    for group_name in groups:
+        group_data = df[df['group_typical'] == group_name]
+        group_size = len(group_data)
+
+        group_proportion = group_size / len(df)
+        sample_size = max(1, int(np.ceil(n * group_proportion)))
+
+
+        group_sample = group_data.sample(n=sample_size, replace=replace, random_state=seed)
+
+        group_variance = group_sample[best_brand_column].var()
+
+        group_samples.append(group_sample)
+        group_variances.append(group_variance)
+        group_sizes.append(sample_size)
+
+    pilot_sample_b = pd.concat(group_samples, ignore_index=True)
+    numerator = sum(n * v for n, v in zip(group_sizes, group_variances))
+    denominator = sum(group_sizes)
+    variance = numerator / denominator
+
+    return pilot_sample_b, variance
 ```
 
 **Наблюдение:** Серийный отбор показал аномально низкую межгрупповую дисперсию ($S^2 \approx 2.43$), что связано с высокой однородностью средних отклонений внутри географических кластеров (станций метро).
@@ -167,10 +177,13 @@ def sample_method_typical(n, replace, seed=100):
 Используем $\alpha = 0.05$. Квантиль Стьюдента берется по $df = n_{\text{pilot}}-1$. Для серийного отбора FPC рассчитывается по числу отобранных станций.
 
 ```python
-alpha = 0.05
-t_val = stats.t.ppf(1 - alpha/2, df=n_pilot-1)
-delta = t_val * np.sqrt(variance / n_pilot) * fpc
-delta_target = delta / 2
+def calculate_margin_of_error(variance, n, alpha, fpc=None):
+    if fpc is None:
+        fpc = np.sqrt((len(df)-n)/(len(df)-1))
+    t_value = stats.t.ppf(1 - alpha/2, df=n-1)
+    std_error = np.sqrt(variance / n)
+    margin_of_error = t_value * std_error * fpc
+    return margin_of_error, t_value, std_error
 ```
 
 **Интерпретация:** Наименьшую предельную ошибку на этапе разведки показал серийный отбор ($\Delta \approx 0.97$), однако целевая ошибка для всех методов берется как половина пилотной $\Delta$ соответствующей схемы.
@@ -217,11 +230,13 @@ delta_target = delta / 2
 | Типический (повт.) | Несмещенный (4/4) | 0.00–0.02 | 0.29–0.33 |
 
 ```python
-# Фрагмент проверки несмещенности
-for method_name, means_list in all_brand_means.items():
-    t_stat, p_value = stats.ttest_1samp(means_list, true_mean)
-    is_unbiased = p_value > 0.05
-    print(f"{method_name}: {'Несмещенный' if is_unbiased else 'Смещенный'} (p={p_value:.3f})")
+for method_name, brand_results in results_15.items():
+    passed = sum(1 for r in brand_results.values() if r['solution'] == 1)
+
+    if passed == 4:
+        status = "Все оценки несмещённые"
+    else:
+        status = "Есть смещённые оценки"
 ```
 
 **Ключевой вывод эксперимента:** Типический и случайный отборы демонстрируют наименьшую вариативность и стабильно несмещенные оценки. Серийный отбор, несмотря на малый требуемый объем, дает высокий разброс средних и в одной из модификаций показывает статистически значимое смещение, что делает его рискованным для маркетинговых выводов.
